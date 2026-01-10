@@ -1,0 +1,224 @@
+// Prisma schema for Agri Rental platform
+// Run `prisma migrate dev` after adjusting DATABASE_URL
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --------------------
+// Enums
+// --------------------
+
+enum UserType {
+  serviceProvider
+  farmer
+  admin
+}
+
+enum RentalStatus {
+  pending
+  provider_confirmed
+  active
+  completed
+  cancelled
+}
+
+enum PaymentStatus {
+  not_paid
+  waiting
+  paid
+  refunded
+}
+
+enum NotificationType {
+  rental_request
+  rental_confirmed
+  message
+  payment_required
+}
+
+// --------------------
+// Models
+// --------------------
+
+model User {
+  id            Int            @id @default(autoincrement())
+  email         String         @unique
+  password      String
+  firstName     String
+  lastName      String
+  phone         String
+  avatar        String?
+  bio           String?
+  address       String?
+  userType      UserType
+  isVerified    Boolean        @default(false)
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  machines      Machine[]
+  rentals       Rental[]       @relation("UserRentals")
+  messages      Message[]
+  notifications Notification[]
+  refreshTokens RefreshToken[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model Machine {
+  id               Int        @id @default(autoincrement())
+  name             String
+  description      String
+  categoryId       Int
+  category         MachineCategory @relation(fields: [categoryId], references: [id])
+  power            String?
+  executors        String?
+  model            String?
+  year             Int?
+  loadCapacity     Int?
+  totalWeight      Int?
+  location         String
+  regionId         Int
+  region           Region      @relation(fields: [regionId], references: [id])
+  pricePerDay      Decimal
+  currency         String      @default("KZT")
+  ownerId          Int
+  owner            User        @relation(fields: [ownerId], references: [id])
+  attachments      AttachmentOnMachine[]
+  photos           MachinePhoto[]
+  rentals          Rental[]
+  isAvailable      Boolean     @default(true)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  @@index([ownerId])
+  @@index([isAvailable])
+  @@map("machines")
+}
+
+model MachineCategory {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  machines Machine[]
+
+  @@map("machine_categories")
+}
+
+model Region {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  machines Machine[]
+
+  @@map("regions")
+}
+
+model Attachment {
+  id       Int       @id @default(autoincrement())
+  name     String
+  machines AttachmentOnMachine[]
+
+  @@map("attachments")
+}
+
+model AttachmentOnMachine {
+  id           Int        @id @default(autoincrement())
+  machineId    Int
+  attachmentId Int
+  machine      Machine    @relation(fields: [machineId], references: [id])
+  attachment   Attachment @relation(fields: [attachmentId], references: [id])
+
+  @@index([machineId])
+  @@index([attachmentId])
+  @@map("attachment_on_machine")
+}
+
+model MachinePhoto {
+  id        Int      @id @default(autoincrement())
+  url       String
+  machineId Int
+  machine   Machine  @relation(fields: [machineId], references: [id])
+
+  @@map("machine_photos")
+}
+
+model Rental {
+  id            Int           @id @default(autoincrement())
+  machineId     Int
+  machine       Machine       @relation(fields: [machineId], references: [id])
+  renterId      Int
+  renter        User          @relation("UserRentals", fields: [renterId], references: [id])
+  startDate     DateTime
+  endDate       DateTime
+  totalPrice    Decimal
+  status        RentalStatus  @default(pending)
+  paymentStatus PaymentStatus @default(not_paid)
+
+  chat          Chat?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@unique([machineId, startDate])
+  @@index([machineId, renterId])
+  @@index([status])
+  @@map("rentals")
+}
+
+model Chat {
+  id        Int      @id @default(autoincrement())
+  rentalId  Int      @unique
+  rental    Rental   @relation(fields: [rentalId], references: [id])
+  messages  Message[]
+  createdAt DateTime @default(now())
+
+  @@map("chats")
+}
+
+model Message {
+  id        Int      @id @default(autoincrement())
+  chatId    Int
+  chat      Chat     @relation(fields: [chatId], references: [id])
+  senderId  Int
+  sender    User     @relation(fields: [senderId], references: [id])
+  text      String
+  createdAt DateTime @default(now())
+
+  @@index([chatId])
+  @@map("messages")
+}
+
+model Notification {
+  id         Int               @id @default(autoincrement())
+  userId     Int
+  user       User              @relation(fields: [userId], references: [id])
+  type       NotificationType
+  rentalId   Int?
+  isRead     Boolean           @default(false)
+  createdAt  DateTime          @default(now())
+
+  @@index([userId])
+  @@index([type])
+  @@map("notifications")
+}
+
+model RefreshToken {
+  id         Int      @id @default(autoincrement())
+  token      String
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id])
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  ip         String?
+  userAgent  String?
+  lastUsedAt DateTime?
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
